@@ -286,3 +286,12 @@ async def example():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         filename="模板.xlsx"
     )
+@app.get("/finish")
+async def finish():
+    """
+    这个函数已经查询完成好的Excel文件。
+
+    返回:
+    -FileResponse: 已经查询完成好的Excel文件。
+    """
+    return FileResponse("./test.xlsx", media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename="查询结果.xlsx")
