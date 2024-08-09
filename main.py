@@ -287,7 +287,7 @@ async def example():
         filename="模板.xlsx"
     )
 @app.get("/finish")
-async def finish():
+async def finish(): 
     """
     这个函数已经查询完成好的Excel文件。
 
