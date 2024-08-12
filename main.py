@@ -18,6 +18,7 @@ import os
 #重启oracle服务监听,数据库信息
 #lsnrctl status   identified by trff_app
 #uvicorn main:app  --port 8002 --reload
+from sqlalchemy import create_engine
 
 #https://www.oracle.com/database/technologies/appdev/python/quickstartpythononprem.html
 #https://docs.sqlalchemy.org/en/20/dialects/oracle.html#module-sqlalchemy.dialects.oracle.oracledb
@@ -78,8 +79,9 @@ hpzlType={
     "其它号牌":"99",
 }
 
+#这个是兼容字符串，必须安装cx_oracle才能运行，安装whl包https://blog.csdn.net/weixin_44100044/article/details/126034475
+engine=create_engine("oracle+cx_oracle://veh_admin:veh_admin@192.168.1.116:1521/?service_name=orcl",echo=True)
 
-engine=create_engine("oracle+oracledb://veh_admin:veh_admin@192.168.1.116:1521/?service_name=orcl",echo=True)
 
 
 @app.get("/")
@@ -112,7 +114,7 @@ def test(hphm: str,hpzl: str):
             result = session.exec(statement).one()
         except Exception as e:  # 如果执行中出现异常（例如，无匹配记录），捕获异常并处理
             # 如果出现异常，创建并返回一个新的Vehicle对象，djzsbh字段设为空字符串
-            result = Vehicle(hpzl=hpzl, hphm=hphm, djzsbh="")
+            result = Vehicle(hpzl=hpzl, hphm=hphm, djzsbh=str(e))
         # 返回查询结果或新创建的Vehicle对象
         return result
 
@@ -139,9 +141,12 @@ async def create_upload_file(background_tasks: BackgroundTasks, file: UploadFile
         if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
             return {"error": "只能上传Excel文件"}
 
-        # 读取Excel文件内容，并将特定列转换为字符串类型。
-        df = pd.read_excel(file.file)
+        # # 读取Excel文件内容，并将特定列转换为字符串类型。
+        # df = pd.read_excel(file.file)
 
+        spooled_tmp_file = file.file  # 这里 file.file 是 SpooledTemporaryFile 对象
+        file_as_bytes = spooled_tmp_file.read()
+        df = pd.read_excel(file_as_bytes)
         # 检查Dataframe是否具有所需的列，若不是，则返回错误信息。
         if "后六位" not in df.columns:
             return {"error": "模板错误，缺少'后六位'列"}
