@@ -82,6 +82,8 @@ hpzlType={
 #这个是兼容字符串，必须安装cx_oracle才能运行，安装whl包https://blog.csdn.net/weixin_44100044/article/details/126034475
 engine=create_engine("oracle+cx_oracle://veh_admin:veh_admin@192.168.1.116:1521/?service_name=orcl",echo=True)
 
+engine=create_engine("oracle+cx_oracle://veh_admin:veh_admin@192.168.1.110:1521/orcl",echo=True)
+#engine=create_engine("oracle+oracledb://veh_admin:veh_admin@192.168.1.110:1521/?service_name=orcl",echo=True)
 
 
 @app.get("/")
@@ -123,59 +125,7 @@ async def create_upload_file(background_tasks: BackgroundTasks, file: UploadFile
     """
     上传并处理Excel文件。
 
-    该函数首先检查上传的文件是否为Excel格式，若不是，则返回错误信息。并查看是否满足模板设置。
-    随后，它读取Excel文件内容，将特定列转换为字符串类型。
-    然后，它遍历每一行数据，生成一个后台任务来处理hpzl和hphm。
-    通过调用`test`函数，它可以获取对应的`djzsbh`编号。
-    最后，它更新Excel文件，并返回处理后的文件。
-
-    参数:
-    - file: 上传的文件，类型为UploadFile，必须通过File(...)依赖注入。
-
-    返回:
-    - 若处理成功，返回包含处理结果的Excel文件，文件名为"查询结果.xlsx"。
-    - 若处理失败，返回包含Error的堆栈信息。
-    """
-    try:
-        # 检查上传的文件是否为Excel文件，若不是，则返回错误信息。
-        if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-            return {"error": "只能上传Excel文件"}
-
-        # # 读取Excel文件内容，并将特定列转换为字符串类型。
-        # df = pd.read_excel(file.file)
-
-        spooled_tmp_file = file.file  # 这里 file.file 是 SpooledTemporaryFile 对象
-        file_as_bytes = spooled_tmp_file.read()
-        df = pd.read_excel(file_as_bytes)
-        # 检查Dataframe是否具有所需的列，若不是，则返回错误信息。
-        if "后六位" not in df.columns:
-            return {"error": "模板错误，缺少'后六位'列"}
-        df["后六位"] = df["后六位"].astype(str)
-
-        if "车牌号" not in df.columns:
-            return {"error": "模板错误，缺少'车牌号'列"}
-        df["车牌号"] = df["车牌号"].astype(str)
-
-        if "车辆类型" not in df.columns:
-            return {"error": "模板错误，缺少'车辆类型'列"}
-
-        # 获取总行数
-        global totalprocess
-        totalprocess = df.shape[0]
-
-        # 遍历每一行数据，生成一个后台任务来处理hpzl和hphm，并通过test函数获取对应的djzsbh。
-        answer: FileResponse = background_tasks.add_task(task, df)
-        return answer
-
-    except Exception as e:
-        # 异常处理：返回错误信息和堆栈跟踪。
-        return {"error": str(e) + "\n" + traceback.format_exc()}
-@app.post("/excel")
-async def create_upload_file(background_tasks: BackgroundTasks,file: UploadFile = File(...)):
-    """
-    上传并处理Excel文件。
-
-    该函数首先检查上传的文件是否为Excel格式，若不是，则返回错误信息。并查看是满足模板设置
+    该函数首先检查上传的文件是否为Excel格式，若不是，则返回错误信息。并查看是否满足模板设置
     随后，它读取Excel文件内容，将特定列转换为字符串类型，并遍历每一行数据，（生成一个task后台任务）
     通过调用`test`函数处理车牌号和车辆类型，以获取对应的`djzsbh`编号。
     最后，根据处理结果更新Excel文件，并返回处理后的文件。
@@ -190,8 +140,22 @@ async def create_upload_file(background_tasks: BackgroundTasks,file: UploadFile 
         # 判断是否为excel文件，如果有不是，反馈错误
         if file.content_type != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
             return {"error": "只能上传Excel文件"}
-        # 读取excel文件为DataFrame，并将特定列转换为字符串类型
-        df = pd.read_excel(file.file)
+            
+        # 使用临时文件解决SpooledTemporaryFile没有seekable属性的问题
+        import tempfile
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as temp_file:
+            # 读取上传的文件内容并写入临时文件
+            contents = file.file.read()
+            temp_file.write(contents)
+            temp_file_path = temp_file.name
+            
+        # 使用临时文件路径读取Excel
+        df = pd.read_excel(temp_file_path)
+        
+        # 处理完成后删除临时文件
+        import os
+        os.unlink(temp_file_path)
+        
         if "后六位" not in df.columns:
             return {"error": "模板错误"}
         df["后六位"] = df["后六位"].astype(str)
@@ -233,10 +197,10 @@ def task(df: pd.DataFrame) -> FileResponse:
         global process
         process = index + 1  # 更新处理计数
         hphm = row["车牌号"]  # 获取车辆识别号
-        hpzl = hpzlType[row["车辆类型"]]  # 获取车辆类型
+        hpzl = hpzlType[row["车辆类型"]]  # 获取车辆类型 
         vehicle = test(hphm, hpzl)  # 调用test函数获取djzsbh
 
-        # 根据djzsbh值更新DataFrame对应行的“后六位”列
+        # 根据djzsbh值更新DataFrame对应行的"后六位"列
         if vehicle.djzsbh == "":
             df.at[index, "后六位"] = "!!基础数据错误,数据无效!!"
         elif vehicle.djzsbh is None:
