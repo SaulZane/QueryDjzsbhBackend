@@ -116,7 +116,7 @@ def test(hphm: str,hpzl: str):
             result = session.exec(statement).one()
         except Exception as e:  # 如果执行中出现异常（例如，无匹配记录），捕获异常并处理
             # 如果出现异常，创建并返回一个新的Vehicle对象，djzsbh字段设为空字符串
-            result = Vehicle(hpzl=hpzl, hphm=hphm, djzsbh=str(e))
+            result = Vehicle(hpzl=hpzl, hphm=hphm, djzsbh="")
         # 返回查询结果或新创建的Vehicle对象
         return result
 
